@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 from aiofiles.os import remove as aioremove, path as aiopath
+import os
 
 from bot import (
     aria2,
@@ -16,6 +17,9 @@ from bot.helper.ext_utils.bot_utils import bt_selection_buttons, sync_to_async
 from bot.helper.mirror_utils.status_utils.aria2_status import Aria2Status
 from bot.helper.telegram_helper.message_utils import sendStatusMessage, sendMessage
 from bot.helper.ext_utils.task_manager import is_queued
+
+# ✅ Import the uploader
+from bot.helper.mirror_utils.upload_utils.uploader import uploader
 
 
 async def add_aria2c_download(link, path, listener, filename, header, ratio, seed_time):
@@ -91,3 +95,19 @@ async def add_aria2c_download(link, path, listener, filename, header, ratio, see
 
         async with queue_dict_lock:
             non_queued_dl.add(listener.uid)
+
+    # ✅ Upload to Pixeldrain after download is added and started
+    try:
+        file_path = os.path.join(path, name)
+        upload_type = config_dict.get('UPLOAD_TYPE', 'pixeldrain')  # Can set in config.env
+
+        result = uploader(file_path, upload_type)
+        link = result.get("download_link", "Upload returned no link")
+
+        LOGGER.info(f"Uploaded to Pixeldrain: {link}")
+        await sendMessage(listener.message, f"✅ Uploaded to Pixeldrain:\n{link}")
+
+    except Exception as e:
+        error = f"❌ Upload failed: {str(e)}"
+        LOGGER.error(error)
+        await sendMessage(listener.message, error)
